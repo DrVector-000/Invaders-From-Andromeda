@@ -16,7 +16,11 @@
 ;    along with Invaders From Andromeda.  If not, see <http://www.gnu.org/licenses/>.
 
 	processor 6502
-	include "vcs.h"
+
+	include "tia.h"
+	include "pia6532.h"
+	include "vars.h"
+
 	include "macro.h"
 	include "my_macro.h"
 	include "energy_macro.h"
@@ -24,455 +28,18 @@
 	include "timer.h"
 
 ;===============================================================================
-; Define Constants
+; Define Constants and Colors
 ;===============================================================================
+	include "Consts.asm"
 
-Volume0 = #4
-Volume1 = #6
-LeftLimitSpaceShip = #30
-RightLimitSpaceShip = #135
-LeftLimitAliens = #28
-RightLimitAliens = #160
-ColorPlanet = #$92
-ColorLandPlanet = #$f2
-ColorOrizonPlanet = #$90
-ColorMissiles = #$fe
-XPosGRP0Energia = #$4c
-ColorEnergyCounter = #$0f
-ColorEnergyCounterWhenOneIsLost = #$00
-WhereStop = #40
-EndPointBallSpaceShip = #2
-HeightInvader = #10
-ColorBall = #$ae
-StartSpaceShip = #150
-ColorLogo = #$98
-MaxShields = #5
-TimeForChangeScreen = #255
-PreBarriers = #126
-EndBarriers = #135
-RedBarriers = #$41
-EnergySingleBarrier = #5
-ColorEndGame = #$46
-LastLevelEndGame = #10
-RightLimitBarriers = #56
-LeftLimitBarriers = #40
-
-;===============================================================================
-; Define Zero Page RAM Usage
-;----------------------------------------
-; ZP RAM variables can only be seen by the 6507 CPU.
-; C variables can only be seen by the ARM CPU.
-; The 4K Display Data bank is used for any variables both CPUs need access to.
-;===============================================================================
-
-        SEG.U VARS
-        ORG $80             
-        
- echo "----",($00FE - *) , "bytes of RAM left (space reserved for 2 byte stack)"
-
-; dgs - use DS to define # of bytes for storage.
-;       ShieldNumber will end up in $80
-;       InvadersLine0 in $81
-;       etc
-	
-ShieldNumber ds 1
-InvadersLine0 ds 1
-InvadersLine1 ds 1
-InvadersLine2 ds 1
-InvadersLine3 ds 1
-InvadersLine4 ds 1
-OffsetXInvaders ds 1
-CoordXInvaders ds 1
-CoordYInvaders ds 1
-CursorLeftInvaders ds 1
-CursorRightInvaders ds 1
-CursorRowInvaders ds 1
-CursorColumnInvaders ds 1
-CursorSpringLeftRight ds 1
-CursorYMissile1 ds 1
-CursorYMissile2 ds 1
-CoordXSpaceShip ds 1
-CoordXUfo ds 1
-PointerGRP0Low ds 1
-PointerGRP0Hi ds 1
-PointerGRP1Low ds 1
-PointerGRP1Hi ds 1
-PntrColorGRPLow ds 1
-PntrColorGRPHi ds 1
-PointerNumberLow ds 1
-PointerNumberHi ds 1
-PointerGFXPlanet ds 1
-Temp ds 1
-TempX ds 1
-Tmp ds 1
-TimerForAll ds 1
-BooleanGameOver ds 1 ;if 0 then game over
-BooleanAtBeginOfEveryLevel ds 1
-BooleanShiftInvadersColumn ds 1
-CursorYBallSpaceShip ds 1
-CoordXBallSpaceShip ds 1
-BooleanFireSpaceShip ds 1
-BooleanHitInvader ds 1
-BooleanFirePressed ds 1
-UfoCollision ds 1
-CollisionInvader ds 1
-
-ArrayPointerGRP0Line0 ds 1
-ArrayPointerGRP0Line1 ds 1
-ArrayPointerGRP0Line2 ds 1
-ArrayPointerGRP0Line3 ds 1
-ArrayPointerGRP0Line4 ds 1
-ArrayPointerGRP1Line0 ds 1
-ArrayPointerGRP1Line1 ds 1
-ArrayPointerGRP1Line2 ds 1
-ArrayPointerGRP1Line3 ds 1
-ArrayPointerGRP1Line4 ds 1
-
-BooleanGRP1AllGone ds 1
-
-CursorSound0 ds 1
-CursorSound1 ds 1
-TempoCH0 ds 1
-TempoCH1 ds 1
-
-MarchSequencer ds 1
-TimerTitleScreen ds 1
-ActiveInvadersLines ds 1
-
-Bullet ds 1
-TimerShiftInvadersColumn ds 1
-StepBall ds 1
-CurosorMaskInvaders ds 1
-TimerMask ds 1
-TotalInvaders ds 1
-AlternateFrameInvader ds 1
-
-PointerSpaceShipLow ds 1
-PointerSpaceShipHi ds 1
-
-CoordYMissile1 ds 1
-CoordYMissile2 ds 1
-
-TimerWhenInvaderStrike ds 1
-CursorWhoBombs ds 1
-
-CoordXMissile1 ds 1
-CoordXMissile2 ds 1
-
-BooleanNoBulletInGame ds 1
-BooleanShieldLost ds 1
-
-LevelNumber ds 1 ;incremented in FIND_HIT_INVADER_MACRO
-LevelBarriers ds 1
-PowerSingleBarrier ds 1
-DefineBarriers ds 1
-MaskDeleteBarrier ds 1
-
-PointerGRP1UfoLow ds 1
-PointerGRP1UfoHi ds 1
-
-BooleanVictorySongCh1 ds 1
-
-KindOfBarriers ds 1
-Direction ds 1
-CoordXBarries ds 1
-
-SoundDataLow ds 1
-SoundDataH ds 1
-SoundMarchDataLow ds 1
-SoundMarchDataHi ds 1
-
-BooleanVictorySongCh0 ds 1
 	
     SEG CODE
-	org $f000
+	ORG		$0000
+	RORG	$F000
 
 ;---Graphics Data---
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-FirstInvader0
-	.byte $80 ; |X       |
-	.byte $5B ; | X XX XX|
-	.byte $3C ; |  XXXX  |
-	.byte $5A ; | X XX X |
-	.byte $FF ; |XXXXXXXX|
-	.byte $FF ; |XXXXXXXX|
-	.byte $42 ; | X    X |
-	.byte $66 ; | XX  XX |
-	.byte $08 ; |    X   |
-	.byte $00 ; |        |
-FirstInvader1
-	.byte $42 ; | X    X |
-	.byte $5A ; | X XX X |
-	.byte $3C ; |  XXXX  |
-	.byte $5A ; | X XX X |
-	.byte $FF ; |XXXXXXXX|
-	.byte $FF ; |XXXXXXXX|
-	.byte $42 ; | X    X |
-	.byte $66 ; | XX  XX |
-	.byte $10 ; |   X    |
-	.byte $00 ; |        |
-SecondInvader0
-	.byte $81 ; |X      X|
-	.byte $C3 ; |XX    XX|
-	.byte $A5 ; |X X  X X|
-	.byte $DB ; |XX XX XX|
-	.byte $DB ; |XX XX XX|
-	.byte $FF ; |XXXXXXXX|
-	.byte $7E ; | XXXXXX |
-	.byte $A5 ; |X X  X X|
-	.byte $24 ; |  X  X  |
-	.byte $00 ; |        |
-SecondInvader1
-	.byte $81 ; |X      X|
-	.byte $E7 ; |XXX  XXX|
-	.byte $A5 ; |X X  X X|
-	.byte $DB ; |XX XX XX|
-	.byte $DB ; |XX XX XX|
-	.byte $FF ; |XXXXXXXX|
-	.byte $7E ; | XXXXXX |
-	.byte $A5 ; |X X  X X|
-	.byte $81 ; |X      X|
-	.byte $00 ; |        |
-ThirdInvader0
-	.byte $66 ; | XX  XX |
-	.byte $24 ; |  X  X  |
-	.byte $7E ; | XXXXXX |
-	.byte $99 ; |X  XX  X|
-	.byte $DB ; |XX XX XX|
-	.byte $DB ; |XX XX XX|
-	.byte $7E ; | XXXXXX |
-	.byte $3C ; |  XXXX  |
-	.byte $AA ; |X X X X |
-	.byte $00 ; |        |
-ThirdInvader1
-	.byte $2C ; |  X XX  |
-	.byte $24 ; |  X  X  |
-	.byte $7E ; | XXXXXX |
-	.byte $99 ; |X  XX  X|
-	.byte $DB ; |XX XX XX|
-	.byte $FF ; |XXXXXXXX|
-	.byte $7E ; | XXXXXX |
-	.byte $3C ; |  XXXX  |
-	.byte $55 ; | X X X X|
-	.byte $00 ; |        |
-ForthInvader0
-	.byte $42 ; | X    X |
-	.byte $7E ; | XXXXXX |
-	.byte $7E ; | XXXXXX |
-	.byte $7E ; | XXXXXX |
-	.byte $3C ; |  XXXX  |
-	.byte $FF ; |XXXXXXXX|
-	.byte $18 ; |   XX   |
-	.byte $81 ; |X      X|
-	.byte $81 ; |X      X|
-	.byte $00 ; |        |
-ForthInvader1
-	.byte $E7 ; |XXX  XXX|
-	.byte $BD ; |X XXXX X|
-	.byte $BD ; |X XXXX X|
-	.byte $FF ; |XXXXXXXX|
-	.byte $3C ; |  XXXX  |
-	.byte $7E ; | XXXXXX |
-	.byte $18 ; |   XX   |
-	.byte $42 ; | X    X |
-	.byte $42 ; | X    X |
-	.byte $00 ; |        |
-FifthInvader0
-	.byte $99 ; |X  XX  X|
-	.byte $A5 ; |X X  X X|
-	.byte $FF ; |XXXXXXXX|
-	.byte $B5 ; |X XX X X|
-	.byte $3C ; |  XXXX  |
-	.byte $3C ; |  XXXX  |
-	.byte $24 ; |  X  X  |
-	.byte $2E ; |  X XXX |
-	.byte $70 ; | XXX    |
-	.byte $00 ; |        |
-FifthInvader1
-	.byte $18 ; |   XX   |
-	.byte $24 ; |  X  X  |
-	.byte $BD ; |X XXXX X|
-	.byte $EF ; |XXX XXXX|
-	.byte $BD ; |X XXXX X|
-	.byte $3C ; |  XXXX  |
-	.byte $24 ; |  X  X  |
-	.byte $74 ; | XXX X  |
-	.byte $0E ; |    XXX |
-	.byte $00 ; |        |
-SixthInvader0
-	.byte $6A ; | XX X X |
-	.byte $81 ; |X      X|
-	.byte $99 ; |X  XX  X|
-	.byte $BD ; |X XXXX X|
-	.byte $24 ; |  X  X  |
-	.byte $BD ; |X XXXX X|
-	.byte $99 ; |X  XX  X|
-	.byte $81 ; |X      X|
-	.byte $56 ; | X X XX |
-	.byte $00 ; |        |
-SixthInvader1
-	.byte $6A ; | XX X X |
-	.byte $C3 ; |XX    XX|
-	.byte $5A ; | X XX X |
-	.byte $7E ; | XXXXXX |
-	.byte $99 ; |X  XX  X|
-	.byte $7E ; | XXXXXX |
-	.byte $5A ; | X XX X |
-	.byte $C3 ; |XX    XX|
-	.byte $56 ; | X X XX |
-	.byte $00 ; |        |
-SeventhInvader0
-	.byte $24 ; |  X  X  |
-	.byte $5A ; | X XX X |
-	.byte $5A ; | X XX X |
-	.byte $7E ; | XXXXXX |
-	.byte $7E ; | XXXXXX |
-	.byte $7E ; | XXXXXX |
-	.byte $99 ; |X  XX  X|
-	.byte $4A ; | X  X X |
-	.byte $89 ; |X   X  X|
-	.byte $00 ; |        |
-SeventhInvader1
-	.byte $66 ; | XX  XX |
-	.byte $DB ; |XX XX XX|
-	.byte $7E ; | XXXXXX |
-	.byte $FF ; |XXXXXXXX|
-	.byte $7E ; | XXXXXX |
-	.byte $99 ; |X  XX  X|
-	.byte $4A ; | X  X X |
-	.byte $52 ; | X X  X |
-	.byte $81 ; |X      X|
-	.byte $00 ; |        |
-EighthInvader0
-	.byte $42 ; | X    X |
-	.byte $BD ; |X XXXX X|
-	.byte $FF ; |XXXXXXXX|
-	.byte $DB ; |XX XX XX|
-	.byte $7E ; | XXXXXX |
-	.byte $7E ; | XXXXXX |
-	.byte $5A ; | X XX X |
-	.byte $49 ; | X  X  X|
-	.byte $94 ; |X  X X  |
-	.byte $00 ; |        |
-EighthInvader1
-	.byte $81 ; |X      X|
-	.byte $BD ; |X XXXX X|
-	.byte $FF ; |XXXXXXXX|
-	.byte $5A ; | X XX X |
-	.byte $7E ; | XXXXXX |
-	.byte $7E ; | XXXXXX |
-	.byte $5A ; | X XX X |
-	.byte $92 ; |X  X  X |
-	.byte $29 ; |  X X  X|
-	.byte $00 ; |        |
-NinethInvader0
-	.byte $99 ; |X  XX  X|
-	.byte $B5 ; |X XX X X|
-	.byte $DB ; |XX XX XX|
-	.byte $EF ; |XXX XXXX|
-	.byte $BD ; |X XXXX X|
-	.byte $1C ; |   XXX  |
-	.byte $B5 ; |X XX X X|
-	.byte $30 ; |  XX    |
-	.byte $B1 ; |X XX   X|
-	.byte $00 ; |        |
-NinethInvader1
-	.byte $99 ; |X  XX  X|
-	.byte $AD ; |X X XX X|
-	.byte $DB ; |XX XX XX|
-	.byte $EF ; |XXX XXXX|
-	.byte $BD ; |X XXXX X|
-	.byte $38 ; |  XXX   |
-	.byte $AD ; |X X XX X|
-	.byte $0D ; |    XX X|
-	.byte $0C ; |    XX  |
-	.byte $00 ; |        |
-TenthInvader0
-	.byte $24 ; |  X  X  |
-	.byte $7E ; | XXXXXX |
-	.byte $56 ; | X X XX |
-	.byte $FF ; |XXXXXXXX|
-	.byte $BC ; |X XXXX  |
-	.byte $3D ; |  XXXX X|
-	.byte $A4 ; |X X  X  |
-	.byte $2F ; |  X XXXX|
-	.byte $F0 ; |XXXX    |
-	.byte $00 ; |        |
-TenthInvader1
-	.byte $41 ; | X     X|
-	.byte $7E ; | XXXXXX |
-	.byte $6A ; | XX X X |
-	.byte $FF ; |XXXXXXXX|
-	.byte $3D ; |  XXXX X|
-	.byte $BC ; |X XXXX  |
-	.byte $25 ; |  X  X X|
-	.byte $F4 ; |XXXX X  |
-	.byte $0F ; |    XXXX|
-InvaderGhost
-	.byte $00 ; |        |
+	include "Graphics.asm"
 
-	.byte $00 ; |        |
-	.byte $00 ; |        |
-	.byte $00 ; |        |
-	.byte $00 ; |        |
-	.byte $00 ; |        |
-	.byte $00 ; |        |
-	.byte $00 ; |        |
-	.byte $00 ; |        |
-	.byte $00 ; |        |
-;Colors
-FirstInvaderColor
-    .byte $BE
-	.byte $BE
-	.byte $BE
-	.byte $BA
-	.byte $C8
-	.byte $C8
-	.byte $C2
-	.byte $C2
-	.byte $Ce
-SecondInvaderColor
-	.byte $20
-	.byte $22
-	.byte $22
-	.byte $24
-	.byte $24
-	.byte $24
-	.byte $26
-	.byte $2A
-	.byte $2E
-ThirdInvaderColor
-	.byte $12
-	.byte $14
-	.byte $16
-	.byte $18
-	.byte $18
-	.byte $18
-	.byte $18
-	.byte $12
-	.byte $14
-ForthInvaderColor
-	.byte $62
-	.byte $64
-	.byte $64
-	.byte $64
-	.byte $62
-	.byte $68
-	.byte $68
-	.byte $68
-	.byte $68
-	.byte #ColorMissiles ;color of grp1 missile and missile1
-FifthInvaderColor
-	.byte $A6
-	.byte $A6
-	.byte $A6
-	.byte $A2
-	.byte $A2
-	.byte $A4
-	.byte $A4
-	.byte $A6
-	.byte $A6
-	.byte #ColorMissiles ;nice trick, grp1 missile and missile1 color
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 TablePtrNumbLow
 	.byte #<Number0, #<Number1, #<Number2, #<Number3, #<Number4, #<Number5
@@ -561,8 +128,16 @@ verifyReset
 	bcs setTimer ;reset?
 	jmp Start
 
+;---------------------------------------------------
+; Vertical Blank
+; NTSC 37 Scan lines
+; PAL SECAM 45 Scan lines
 setTimer
-	lda #45 ;37 lines x 76 cycles per line = 2812 cycles / 64 = 43
+	IF SYSTEM = PAL || SYSTEM = SECAM
+		lda #53 ; 76 / 64 * 45
+	ELSE
+		lda #44 ; 76 / 64 * 37
+	ENDIF
 	sta TIM64T
 
 increaseMyTimers
@@ -1280,6 +855,14 @@ noLost
 	sta COLUP0
 	sta COLUP1
 
+
+
+	;REPEAT 20
+	;	sta WSYNC
+	;REPEND
+
+
+
 	POSITIONING_ENERGY_COUNTER_MACRO
 	DEF_NUMBERS_POINTERS_MACRO
 
@@ -1331,7 +914,12 @@ finalLoop
 	sta PointerGFXPlanet
 
 	inx
-	cpx #192
+	IF SYSTEM = PAL || SYSTEM = SECAM
+		cpx #228
+		;cpx #208
+	ELSE
+		cpx #192
+	ENDIF
 	bne finalLoop
 
 	lda Temp
@@ -1339,8 +927,11 @@ finalLoop
 
 ; 30 lines of overscan
 LVOver
-	;sta WSYNC
-	lda #35 ;30 lines x 76 cycles per line = 2280 cycles / 64 = 35
+	IF SYSTEM = PAL || SYSTEM = SECAM
+		lda #43 ; 76 / 64 * 36
+	ELSE
+		lda #36 ; 76 / 64 * 30
+	ENDIF
 	sta TIM64T
 	sta WSYNC
 
@@ -1587,9 +1178,10 @@ deltaFrameUp
 	dey
 	bne .deltaFrame
 	jmp changeColorEnergyCounterWhenOneIsLost
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; SUBROUTINE
-PositionElement
+PositionElement SUBROUTINE
 ;ac is the X position 
 ;y is the graphic object
 	sec
@@ -1606,9 +1198,10 @@ PositionElement
 	sta RESP0,y	;fix coarse position
 	sta HMP0,y
 	rts
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Reset Missile-Ball
-ResetBallMissileGRP0
+ResetBallMissileGRP0 SUBROUTINE
 	lda #0
 	sta CollisionInvader
 	sta BooleanFireSpaceShip
@@ -1616,9 +1209,10 @@ ResetBallMissileGRP0
 	lda #152
 	sta CursorYBallSpaceShip
 	rts
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;SUBROUTINE Decrease hit barrier
-DecreaseBarrier
+DecreaseBarrier SUBROUTINE
 	lda #EnergySingleBarrier ;the full enery value is restored for the next line
 	sta PowerSingleBarrier
 	;DefineBarriers    = lda 10101010
@@ -1638,9 +1232,10 @@ DecreaseBarrier
 	asl MaskDeleteBarrier
 	asl MaskDeleteBarrier
 	rts
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;SUBROUTINE called by PLAY_SOUND_MACRO even for play Invader March
-SoundEffectCH0
+SoundEffectCH0 SUBROUTINE
 	ldy CursorSound0
 	;last 3 datas must be zero, so all the sounds stop
 	lda (SoundMarchDataLow),y
@@ -1656,9 +1251,10 @@ SoundEffectCH0
 	sty CursorSound0
 .endMarchSound
 	rts
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;SUBROUTINE called by PLAY_SOUND_MACRO
-SoundEffectCH1
+SoundEffectCH1 SUBROUTINE
 	ldy CursorSound1
 	;last 3 datas must be zero, so all the sounds stop
 	lda (SoundDataLow),y
@@ -1674,9 +1270,10 @@ SoundEffectCH1
 	sty CursorSound1
 .endSound
 	rts
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;SUBROUTINE
-MoveLeftRight
+MoveLeftRight SUBROUTINE
 	lda TimerForAll
 	and #%00011111
 	bne .endSpring
@@ -1684,7 +1281,6 @@ MoveLeftRight
 	lda CoordXBarries
 	adc Direction ;it can be 1 or -1
 	sta CoordXBarries
-
 .checkLeftLimit
 	;lda CoordXBarries
 	cmp #LeftLimitBarriers
@@ -1700,684 +1296,18 @@ MoveLeftRight
 	sta Direction ;it becomes -1
 .endSpring
 	rts
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;SoundFX
-InvadersMarch
-	.byte #$0a,#$0e,#$0f,  #$00,#$00,#$0f,  #$0a,#$10,#$0f,  #$00,#$00,#$0f,  #$0a,#$12,#$0f,  #$00,#$00,#$0f,  #$0a,#$13,#$0f,  #$00,#$00,#$0f
-Fire
-	.byte #$08,#$1f,#$01,  #$08,#$1d,#$01,  #$08,#$1a,#$01,  #$08,#$09,#$01,  #$08,#$06,#$01,  #$00,#$00,#$00
-InvaderExplosion
-	.byte #$0c,#$05,#$02,  #$0c,#$08,#$02,  #$0c,#$0b,#$02,  #$0c,#$14,#$02,  #$06,#$01,#$02,  #$00,#$00,#$00
-UfoHit
-	.byte #$04,#$0d,#$02,  #$04,#$0e,#$02,  #$04,#$0f,#$02,  #$08,#$04,#$02,  #$06,#$09,#$02,  #$00,#$00,#$00
-SpaceShipHit
-	.byte #$0c,#$18,#$01,  #$0d,#$03,#$01,  #$0c,#$1a,#$01,  #$0d,#$04,#$01,  #$0c,#$1c,#$01,  #$0d,#$05,#$01
-	.byte #$0c,#$19,#$01,  #$0d,#$06,#$01,  #$0c,#$1b,#$01,  #$0d,#$07,#$01,  #$00,#$00,#$00
-VictorySongCh0
-	.byte #0,  #0,  #80
-	.byte #12, #11, #92
-	.byte #0,  #0,  #28
-	.byte #12, #11, #120
-	.byte #0,  #0,  #28
-	.byte #6,  #13, #30,   #6, #14, #30,   #6, #16, #30
-	.byte #6,  #13, #92
-	.byte #0,#0,#0
-VictorySongCh1
-	.byte #0,  #0,  #60
-	.byte #12, #23, #8,   #8, #19, #2
-	.byte #12, #20, #8,   #8, #19, #2
-	.byte #12, #23, #8,   #8, #19, #2
+	include "Sound.asm"
 
-	.byte #6, #13, #30,   #6, #14, #30,   #6, #16, #30
+;************************************************************************
+;* Interrupt Vectors
+;************************************************************************
+	SEG		IVECT
+	ORG		$0FFA
+	RORG	$FFFA
 
-	.byte #12, #23, #8,   #8, #19, #2
-	.byte #12, #20, #8,   #8, #19, #2
-	.byte #12, #23, #8,   #8, #19, #2
-
-	.byte #6, #13, #30,   #6, #14, #30,   #6, #16, #30
-
-	.byte #12, #11, #8,   #8, #19, #2
-	.byte #4,  #31, #8,   #8, #19, #2
-	.byte #12, #11, #8,   #8, #19, #2
-
-	.byte #4, #31, #60,  #4,  #26, #30,   #4, #23, #30,  #4,  #26, #90
-	.byte #8, #19, #5,   #$0, #$0, #$5,   #8, #19, #5,   #$0, #$0, #$5,   #8, #19, #5,   #$0, #$0, #$5,   #8, #31, #5 ;final drums
-	.byte #0,#0,#0
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;
-SpaceShip0
-	.byte $10 ; |   X    |
-	.byte $10 ; |   X    |
-	.byte $38 ; |  XXX   |
-	.byte $38 ; |  XXX   |
-	.byte $38 ; |  XXX   |
-	.byte $BA ; |X XXX X |
-	.byte $EE ; |XXX XXX |
-	.byte $AA ; |X X X X |
-	.byte $FE ; |XXXXXXX |
-	.byte $FE ; |XXXXXXX |
-	.byte $BA ; |X XXX X |
-	.byte $38 ; |  XXX   |
-	.byte $10 ; |   X    |
-	.byte $00 ; |        |
-SpaceShip1
-	.byte $10 ; |   X    |
-	.byte $10 ; |   X    |
-	.byte $38 ; |  XXX   |
-	.byte $38 ; |  XXX   |
-	.byte $38 ; |  XXX   |
-	.byte $BA ; |X XXX X |
-	.byte $EE ; |XXX XXX |
-	.byte $AA ; |X X X X |
-	.byte $FE ; |XXXXXXX |
-	.byte $FE ; |XXXXXXX |
-	.byte $BA ; |X XXX X |
-	.byte $92 ; |X  X  X |
-	.byte $00 ; |        |
-	.byte $00 ; |        |
-ColorSpaceShip
-	.byte $E2
-	.byte $E4
-	.byte $90
-	.byte $92
-	.byte $92
-	.byte $92
-	.byte $92
-	.byte $92
-	.byte $92
-	.byte $04
-	.byte $42
-	.byte $40
-	.byte $40
-	.byte $00
-
-Ufo
-	.byte $18 ; |   XX   |
-	.byte $2C ; |  X XX  |
-	.byte $5E ; | X XXXX |
-	.byte $FF ; |XXXXXXXX|
-	.byte $FF ; |XXXXXXXX|
-	.byte $3C ; |  XXXX  |
-	.byte $00 ; |        |
-ColorUfo
-	.byte $0E
-	.byte $0E
-	.byte $0E
-	.byte $84
-	.byte $82
-	.byte $94
-	.byte $00
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-Shield0
-	.byte $00 ; |        |
-	.byte $D1 ; |XX X   X|
-	.byte $90 ; |X  X    |
-	.byte $D1 ; |XX X   X|
-	.byte $5D ; | X XXX X|
-	.byte $55 ; | X X X X|
-	.byte $D5 ; |XX X X X|
-Shield1
-	.byte $08 ; |    X   |
-	.byte $09 ; |    X  X|
-	.byte $69 ; | XX X  X|
-	.byte $69 ; | XX X  X|
-	.byte $6B ; | XX X XX|
-	.byte $4B ; | X  X XX|
-	.byte $6B ; | XX X XX|
-Number0
-	.byte $7E ; | XXXXXX |
-	.byte $66 ; | XX  XX |
-	.byte $66 ; | XX  XX |
-	.byte $66 ; | XX  XX |
-	.byte $66 ; | XX  XX |
-	.byte $66 ; | XX  XX |
-	.byte $7E ; | XXXXXX |
-Number1
-	.byte $38 ; |  XXX   |
-	.byte $18 ; |   XX   |
-	.byte $18 ; |   XX   |
-	.byte $18 ; |   XX   |
-	.byte $18 ; |   XX   |
-	.byte $18 ; |   XX   |
-	.byte $7E ; | XXXXXX |
-Number2
-	.byte $7E ; | XXXXXX |
-	.byte $06 ; |     XX |
-	.byte $06 ; |     XX |
-	.byte $7E ; | XXXXXX |
-	.byte $60 ; | XX     |
-	.byte $60 ; | XX     |
-	.byte $7E ; | XXXXXX |
-Number3
-	.byte $7E ; | XXXXXX |
-	.byte $06 ; |     XX |
-	.byte $06 ; |     XX |
-	.byte $1E ; |   XXXX |
-	.byte $06 ; |     XX |
-	.byte $06 ; |     XX |
-	.byte $7E ; | XXXXXX |
-Number4
-	.byte $60 ; | XX     |
-	.byte $66 ; | XX  XX |
-	.byte $66 ; | XX  XX |
-	.byte $7E ; | XXXXXX |
-	.byte $06 ; |     XX |
-	.byte $06 ; |     XX |
-	.byte $06 ; |     XX |
-Number5
-	.byte $7E ; | XXXXXX |
-	.byte $60 ; | XX     |
-	.byte $60 ; | XX     |
-	.byte $7E ; | XXXXXX |
-	.byte $06 ; |     XX |
-	.byte $06 ; |     XX |
-	.byte $7E ; | XXXXXX |
-
-;;;;;;;;;;;;;;;;;;;
-	align $100
-final_0
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00001000
-	.byte %00001000
-	.byte %00001000
-	.byte %00001110
-	.byte %00001010
-	.byte %00001010
-	.byte %00001010
-	.byte %00001110
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %01110111
-	.byte %00010101
-	.byte %00010101
-	.byte %01110101
-	.byte %01010101
-	.byte %01010101
-	.byte %01010101
-	.byte %01010111
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %11101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101100
-	.byte %11001110
-	.byte %10101010
-	.byte %10101010
-	.byte %11101110
-
-final_1
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %11101010
-	.byte %10001010
-	.byte %10001010
-	.byte %10001110
-	.byte %10001010
-	.byte %10001010
-	.byte %10001010
-	.byte %10001110
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %01110011
-	.byte %01010000
-	.byte %01010000
-	.byte %01010000
-	.byte %01010011
-	.byte %01010010
-	.byte %01010010
-	.byte %01010011
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %10100100
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %11101010
-	.byte %10101010
-	.byte %10101010
-	.byte %11101010
-
-final_2
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %10101110
-	.byte %10101000
-	.byte %10101000
-	.byte %10101000
-	.byte %10101100
-	.byte %10101000
-	.byte %10101000
-	.byte %11101110
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %10101001
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10111010
-	.byte %00101010
-	.byte %00101010
-	.byte %10111010
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %11100111
-	.byte %10100100
-	.byte %10100100
-	.byte %10100100
-	.byte %10100100
-	.byte %10100100
-	.byte %10100100
-	.byte %11100100
-
-final_3
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %01000111
-	.byte %01000100
-	.byte %01000010
-	.byte %01000010
-	.byte %01000001
-	.byte %01000001
-	.byte %01000000
-	.byte %11100111
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00111011
-	.byte %10100010
-	.byte %10100010
-	.byte %10100010
-	.byte %10110010
-	.byte %10100010
-	.byte %10100010
-	.byte %10111011
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %01000101
-	.byte %01000101
-	.byte %01000101
-	.byte %01000101
-	.byte %01000111
-	.byte %01000101
-	.byte %01000101
-	.byte %11100101
-
-final_4
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %10100010
-	.byte %00100010
-	.byte %00100010
-	.byte %00100010
-	.byte %00111011
-	.byte %00101010
-	.byte %10101010
-	.byte %10111010
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00001001
-	.byte %10001001
-	.byte %10001001
-	.byte %10001001
-	.byte %10001001
-	.byte %10001001
-	.byte %10001001
-	.byte %00011101
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %01110111
-	.byte %01010101
-	.byte %01010101
-	.byte %01010101
-	.byte %01010100
-	.byte %01010100
-	.byte %01010100
-	.byte %01110111
-
-final_5
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %10100000
-	.byte %10000000
-	.byte %10100000
-	.byte %10100000
-	.byte %10100000
-	.byte %10100000
-	.byte %10100000
-	.byte %10100000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %01011100
-	.byte %01010000
-	.byte %01010000
-	.byte %01010000
-	.byte %11011000
-	.byte %01010000
-	.byte %01010000
-	.byte %01011100
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %01010101
-	.byte %01010101
-	.byte %01010101
-	.byte %01010101
-	.byte %01110101
-	.byte %01010101
-	.byte %01010101
-	.byte %01110111
-;;;;;;;;;;;;;;;;;;;;
-;TITLE GAME
-	align $100
-logo_0
-	.byte %11101110
-	.byte %10100010
-	.byte %11101110
-	.byte %10001010
-	.byte %10001010
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000010
-	.byte %00000010
-	.byte %00000010
-	.byte %00000010
-	.byte %00000010
-	.byte %00000011
-	.byte %00000010
-	.byte %00000010
-	.byte %00000010
-	.byte %00000010
-	.byte %00000011
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %10101010
-	.byte %10101011
-	.byte %10101010
-	.byte %10101010
-	.byte %10110010
-	.byte %10000010
-	.byte %10000010
-	.byte %10000100
-logo_1
-	.byte %01110101
-	.byte %01000100
-	.byte %01000101
-	.byte %01000101
-	.byte %01110101
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %10101011
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10110011
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00011101
-	.byte %00010101
-	.byte %10011101
-	.byte %10000101
-	.byte %10011000
-	.byte %01000000
-	.byte %00000000
-	.byte %00000000
-logo_2
-	.byte %11010101
-	.byte %01010101
-	.byte %11011101
-	.byte %00010101
-	.byte %11011101
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00101011
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10110010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %00110011
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %11011101
-	.byte %01010001
-	.byte %01011101
-	.byte %11010101
-	.byte %01001100
-	.byte %01000000
-	.byte %01000000
-	.byte %01000000
-logo_3
-	.byte %01011100
-	.byte %01010100
-	.byte %01010100
-	.byte %01010100
-	.byte %11011100
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101010
-	.byte %10101100
-	.byte %10111000
-	.byte %10100000
-	.byte %00000001
-	.byte %00000000
-	.byte %00000000
-	.byte %00011100
-	.byte %00000100
-	.byte %00011100
-	.byte %00010000
-	.byte %11001100
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-logo_4
-	.byte %01110111
-	.byte %01000101
-	.byte %01110101
-	.byte %00010101
-	.byte %01110111
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %11101100
-	.byte %10001010
-	.byte %10001010
-	.byte %10001010
-	.byte %10001010
-	.byte %10001010
-	.byte %11001010
-	.byte %10001010
-	.byte %10001010
-	.byte %01101010
-	.byte %00001100
-	.byte %00000000
-	.byte %10000000
-	.byte %10000000
-	.byte %10010001
-	.byte %10010001
-	.byte %10010001
-	.byte %10010001
-	.byte %11001100
-	.byte %10000000
-	.byte %10000000
-	.byte %11100000
-logo_5
-	.byte %01110111
-	.byte %01000100
-	.byte %01110111
-	.byte %00010001
-	.byte %01110111
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %00000000
-	.byte %10100000
-	.byte %10100000
-	.byte %10100000
-	.byte %10100000
-	.byte %10100000
-	.byte %11100000
-	.byte %10100000
-	.byte %10100000
-	.byte %10100000
-	.byte %10100000
-	.byte %11100000
-	.byte %00000000
-	.byte %00000001
-	.byte %00000001
-	.byte %10010101
-	.byte %01010101
-	.byte %01010101
-	.byte %01010101
-	.byte %11011110
-	.byte %00010000
-	.byte %00000000
-	.byte %00000000
-
-;*************************************************
-;PLAYFIELD of PLANET
-PlayfieldPlanet
-	.byte $80,$80 ;|   XX               | (  0)
-	.byte $80,$88 ;|   XX   X           | (  1)
-	.byte $C0,$08 ;|  XX    X           | (  2)
-	.byte $C0,$18 ;|  XX   XX           | (  3)
-	.byte $00,$18 ;|       XX           | (  4)
-	.byte $00,$3C ;|      XXXX          | (  5)
-	.byte $00,$3C ;|      XXXX          | (  6)
-	.byte $00,$20 ;|      X             | (  7)
-	.byte $00,$01 ;|           X        | (  8)
-	.byte $00,$01 ;|           X        | (  9)
-	.byte $00,$41 ;|     X     X        | ( 10)
-	.byte $10,$41 ;|X    X     X        | ( 11)
-	.byte $10,$49 ;|X    X  X  X        | ( 12)
-	.byte $10,$69 ;|X    XX X  X        | ( 13)
-	.byte $10,$E9 ;|X   XXX X  X        | ( 14)
-	.byte $10,$C9 ;|X   XX  X  X        | ( 15)
-	.byte $10,$88 ;|X   X   X           | ( 16)
-	.byte $50,$08 ;|X X     X           | ( 17)
-	.byte $50,$08 ;|X X     X           | ( 18)
-	.byte $50,$08 ;|X X     X           | ( 19)
-	.byte $70,$08 ;|XXX     X           | ( 20)
-	.byte $70,$0C ;|XXX     XX          | ( 21)
-	.byte $F0,$0C ;|XXXX    XX          | ( 22)
-	.byte $F0,$9C ;|XXXXX  XXX          | ( 23)
-	.byte $F0,$DC ;|XXXXXX XXX          | ( 24)
-	.byte $F0,$DC ;|XXXXXX XXX          | ( 25)
-	.byte $F0,$9C ;|XXXXX  XXX          | ( 26)
-	.byte $70,$1C ;|XXX    XXX          | ( 27)
-	.byte $30,$3C ;|XX    XXXX          | ( 28)
-	.byte $10,$3C ;|X     XXXX          | ( 29)
-	.byte $00,$3F ;|      XXXXXX        | ( 30) ;missile
-	.byte $00,$3F ;|      XXXXXX        | ( 31) ;missile
-	.byte $00,$3F ;|      XXXXXX        | ( 32) ;missile
-	.byte $00,$3F ;|      XXXXXX        | ( 33) ;missile
-	.byte $00,$7F ;|     XXXXXXX        | ( 34) ;missile
-	.byte $00,$7C ;|     XXXXX          | ( 35)
-	.byte $00,$7C ;|     XXXXX          | ( 36)
-	.byte $00,$F8 ;|    XXXXX           | ( 37)
-	.byte $00,$F0 ;|    XXXX            | ( 39)
-	.byte $00,$E0 ;|    XXX             | ( 40)
-	.byte $80,$C0 ;|   XXX              | ( 41)
-	.byte $C0,$80 ;|  XXX               | ( 42)
-	.byte $C0,$00 ;|  XX                | ( 43)
-	.byte $00,$00 ;|                    | ( 44)
-	.byte $00,$00 ;|                    | ( 45)
-	.byte $00,$00 ;|                    | ( 46)
-	.byte $00,$00 ;|                    | ( 47)
-	.byte $20,$00 ;| X                  | ( 48)
-	.byte $20,$00 ;| X                  | ( 49)
-	.byte $60,$00 ;| XX                 | ( 50)
-	.byte $F0,$00 ;|XXXX                | ( 51)
-	.byte $70,$00 ;|XXX                 | ( 52)
-	.byte $30,$00 ;|XX                  | ( 53)
-	.byte $30,$00 ;|XX                  | ( 54)
-	.byte $00,$00 ;|                    | ( 55)
-	.byte $00,$00 ;|                    | ( 56)
-	.byte $00,$00 ;|                    | ( 57)
-	.byte $00,$00 ;|                    | ( 58)
-	.byte $00,$00 ;|                    | ( 59)
-	.byte $80,$00 ;|   X                | ( 60)
-	.byte $80,$00 ;|   X                | ( 61)
-	.byte $80,$00 ;|   X                | ( 62)
-	.byte $80,$00 ;|   X                | ( 63)
-	.byte $80,$00 ;|   X                | ( 64)
-	.byte $80,$80 ;|   XX               | ( 65)
-	.byte $C0,$80 ;|  XXX               | ( 66)
-	.byte $C0,$80 ;|  XXX               | ( 67)
-	.byte $C0,$A0 ;|  XXX X             | ( 68)
-	.byte $C0,$A0 ;|  XXX X             | ( 69)
-	.byte $C0,$A0 ;|  XXX X             | ( 70)
-	.byte $C0,$B0 ;|  XXX XX            | ( 71)
-	.byte $E0,$F0 ;| XXXXXXX            | ( 72)
-	.byte $E0,$F8 ;| XXXXXXXX           | ( 73)
-	.byte $E0,$F0 ;| XXXXXXX            | ( 74)
-;*************************************************
-	
-	org $fffc
+	.word Start
 	.word Start
 	.word Start
